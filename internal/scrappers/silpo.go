@@ -1,18 +1,27 @@
-package main
+package scrappers
 
 import (
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"sync"
 	"time"
 )
+
+var (
+	categoriesUrl      = "https://sf-ecom-api.silpo.ua/v1/branches/00000000-0000-0000-0000-000000000000/categories/tree"
+	categoryDetailsUrl = "https://sf-ecom-api.silpo.ua/v1/uk/branches/00000000-0000-0000-0000-000000000000/categories/"
+	productsUrl        = "https://sf-ecom-api.silpo.ua/v1/uk/branches/00000000-0000-0000-0000-000000000000/products"
+	csvHeader          = []string{"Name", "Ref", "Price", "Category", "Shop"}
+)
+
+type SilpoScraper struct {
+	Client    *http.Client
+	CSVHeader []string
+}
 
 type CategoryItem struct {
 	Title string
@@ -37,20 +46,24 @@ type Product struct {
 	Items []ProductDetails `json:"items"`
 }
 
-var client = &http.Client{
-	Timeout: 30 * time.Second,
-	Transport: &http.Transport{
-		MaxIdleConns:        100,
-		MaxIdleConnsPerHost: 10,
-		MaxConnsPerHost:     75,
-		IdleConnTimeout:     90 * time.Second,
-		TLSHandshakeTimeout: 10 * time.Second,
-		DisableKeepAlives:   false,
-	},
+func NewSilpoClient() *SilpoScraper {
+	return &SilpoScraper{
+		Client: &http.Client{
+			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+				MaxIdleConnsPerHost: 10,
+				MaxConnsPerHost:     75,
+				IdleConnTimeout:     90 * time.Second,
+				TLSHandshakeTimeout: 10 * time.Second,
+				DisableKeepAlives:   false,
+			},
+		},
+		CSVHeader: csvHeader,
+	}
 }
 
-func makeRequest(cli *http.Client, reqUrl string, params map[string]string) (resp *http.Response, err error) {
-	// TODO: create client as a type method
+func (s *SilpoScraper) makeRequest(reqUrl string, params map[string]string) (resp *http.Response, err error) {
 	if params != nil {
 		p := url.Values{}
 		for k, v := range params {
@@ -68,7 +81,7 @@ func makeRequest(cli *http.Client, reqUrl string, params map[string]string) (res
 
 	req.Header.Add("Accept", "application/json")
 	req.Header.Add("Accept-Encoding", "utf-8")
-	req.Host = "sf-ecom-api.silpo.ua"
+	req.Host = "sf-ecom-api.scrappers.ua"
 	req.Header.Add("Origin", "https://silpo.ua")
 	req.Header.Add("Referer", "https://silpo.ua/")
 	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0")
@@ -78,8 +91,8 @@ func makeRequest(cli *http.Client, reqUrl string, params map[string]string) (res
 	req.Header.Add("Sec-GPC", "1")
 	req.Header.Add("TE", "trailers")
 	req.Header.Add("Accept-Language", "en-GB,en;q=0.5")
-	fmt.Printf("reqUrl: %s\n", reqUrl)
-	resp, respErr := cli.Do(req)
+	fmt.Printf("Requesting: %s\n", reqUrl)
+	resp, respErr := s.Client.Do(req)
 	if respErr != nil {
 		return nil, respErr
 	}
@@ -87,18 +100,21 @@ func makeRequest(cli *http.Client, reqUrl string, params map[string]string) (res
 	return resp, nil
 }
 
-func (c *Categories) getCategories() {
-	categoriesUrl := "https://sf-ecom-api.silpo.ua/v1/branches/00000000-0000-0000-0000-000000000000/categories/tree"
+func (s *SilpoScraper) GetCategories() (*Categories, error) {
 	params := map[string]string{
 		"deliveryType": "DeliveryHome",
 		"depth":        "1",
 	}
-	resp, respErr := makeRequest(client, categoriesUrl, params)
+	resp, respErr := s.makeRequest(categoriesUrl, params)
 	if respErr != nil {
 		panic(respErr)
 	}
 	bb, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	err := resp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	var c *Categories
 	rb := json.Unmarshal(bb, &c)
 	if rb != nil {
 		panic(rb)
@@ -108,33 +124,35 @@ func (c *Categories) getCategories() {
 		total += v.Total
 	}
 	fmt.Printf("Found %v categories with total amount of items: %v\n", c.Total, total)
+	return c, nil
 }
 
-func (c *Categories) getCategoriesTitles() {
-	categoryDetailsUrl := "https://sf-ecom-api.silpo.ua/v1/uk/branches/00000000-0000-0000-0000-000000000000/categories/"
-	for k, v := range c.Items {
+func (s *SilpoScraper) GetCategoriesTitles(cts *Categories) {
+	for k, v := range cts.Items {
 		ctUrl := fmt.Sprintf("%s%s", categoryDetailsUrl, v.Slug)
-		resp, err := makeRequest(client, ctUrl, nil)
+		resp, err := s.makeRequest(ctUrl, nil)
 		if err != nil {
 			panic(err)
 		}
 		bb, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		bcErr := resp.Body.Close()
+		if bcErr != nil {
+			return
+		}
 		var ci CategoryItem
 		rb := json.Unmarshal(bb, &ci)
 		if rb != nil {
 			panic(rb)
 		}
-		c.Items[k].Title = ci.Title
+		cts.Items[k].Title = ci.Title
 	}
 }
-func getProducts(cti []CategoryItem) ([][]string, error) {
-	productsUrl := "https://sf-ecom-api.silpo.ua/v1/uk/branches/00000000-0000-0000-0000-000000000000/products"
+func (s *SilpoScraper) GetProducts(cti []CategoryItem) ([][]string, error) {
 	querySize := 100
 	mu := sync.Mutex{}
 	var result [][]string
 	var wg sync.WaitGroup
-	var httpSemaphore = make(chan struct{}, 25)
+	var httpSemaphore = make(chan struct{}, 35)
 	resultsChan := make(chan []string)
 
 	for _, ci := range cti {
@@ -169,7 +187,7 @@ func getProducts(cti []CategoryItem) ([][]string, error) {
 					mu.Unlock()
 
 					reqUrl := fmt.Sprintf("%s?%s", productsUrl, queryString)
-					resp, respErr := makeRequest(client, reqUrl, nil)
+					resp, respErr := s.makeRequest(reqUrl, nil)
 					if respErr != nil {
 						panic(respErr)
 					}
@@ -177,11 +195,14 @@ func getProducts(cti []CategoryItem) ([][]string, error) {
 					if respBodyErr != nil {
 						panic(respBodyErr)
 					}
-					resp.Body.Close()
+					err := resp.Body.Close()
+					if err != nil {
+						return
+					}
 					var prd Product
-					rbjson := json.Unmarshal(respBody, &prd)
-					if rbjson != nil {
-						panic(rbjson)
+					rbJson := json.Unmarshal(respBody, &prd)
+					if rbJson != nil {
+						panic(rbJson)
 					}
 					for _, v := range prd.Items {
 						resultsChan <- []string{
@@ -189,7 +210,7 @@ func getProducts(cti []CategoryItem) ([][]string, error) {
 							fmt.Sprintf("https://silpo.ua/product/%s", v.SectionSlug),
 							fmt.Sprintf("%.2f грн/%s", v.DisplayPrice, v.DisplayRatio),
 							ci.Title,
-							"silpo",
+							"scrappers",
 						}
 					}
 				}(offset)
@@ -209,37 +230,4 @@ func getProducts(cti []CategoryItem) ([][]string, error) {
 	}
 
 	return result, nil
-}
-
-func main() {
-	log.Println("Starting main program")
-	cts := Categories{}
-	cts.getCategories()
-	cts.getCategoriesTitles()
-
-	file, err := os.Create("output.csv")
-	if err != nil {
-		log.Fatal("Error creating file:", err)
-	}
-	defer file.Close()
-
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	header := []string{"Name", "Ref", "Price", "Category", "Shop"}
-
-	if err = writer.Write(header); err != nil {
-		log.Fatal("Error writing record to CSV:", err)
-	}
-
-	products, prErr := getProducts(cts.Items)
-	if prErr != nil {
-		log.Fatal(prErr)
-	}
-
-	if err := writer.WriteAll(products); err != nil {
-		log.Fatal("Error writing record to CSV:", err)
-	}
-
-	log.Println("Data successfully written to output.csv")
 }

@@ -11,13 +11,6 @@ import (
 	"time"
 )
 
-var (
-	categoriesUrl      = "https://sf-ecom-api.silpo.ua/v1/branches/00000000-0000-0000-0000-000000000000/categories/tree"
-	categoryDetailsUrl = "https://sf-ecom-api.silpo.ua/v1/uk/branches/00000000-0000-0000-0000-000000000000/categories/"
-	productsUrl        = "https://sf-ecom-api.silpo.ua/v1/uk/branches/00000000-0000-0000-0000-000000000000/products"
-	csvHeader          = []string{"Name", "Ref", "Price", "Category", "Shop"}
-)
-
 type SilpoScraper struct {
 	Client    *http.Client
 	CSVHeader []string
@@ -105,7 +98,7 @@ func (s *SilpoScraper) GetCategories() (*Categories, error) {
 		"deliveryType": "DeliveryHome",
 		"depth":        "1",
 	}
-	resp, respErr := s.makeRequest(categoriesUrl, params)
+	resp, respErr := s.makeRequest(SilpoCategoriesURL, params)
 	if respErr != nil {
 		panic(respErr)
 	}
@@ -129,7 +122,7 @@ func (s *SilpoScraper) GetCategories() (*Categories, error) {
 
 func (s *SilpoScraper) GetCategoriesTitles(cts *Categories) {
 	for k, v := range cts.Items {
-		ctUrl := fmt.Sprintf("%s%s", categoryDetailsUrl, v.Slug)
+		ctUrl := fmt.Sprintf("%s%s", SilpoCategoryDetailsURL, v.Slug)
 		resp, err := s.makeRequest(ctUrl, nil)
 		if err != nil {
 			panic(err)
@@ -186,7 +179,7 @@ func (s *SilpoScraper) GetProducts(cti []CategoryItem) ([][]string, error) {
 					queryString := p.Encode()
 					mu.Unlock()
 
-					reqUrl := fmt.Sprintf("%s?%s", productsUrl, queryString)
+					reqUrl := fmt.Sprintf("%s?%s", SilpoProductsURL, queryString)
 					resp, respErr := s.makeRequest(reqUrl, nil)
 					if respErr != nil {
 						panic(respErr)

@@ -52,7 +52,7 @@ func NewSilpoClient() *SilpoScraper {
 				DisableKeepAlives:   false,
 			},
 		},
-		CSVHeader: csvHeader,
+		CSVHeader: CSVHeader,
 	}
 }
 

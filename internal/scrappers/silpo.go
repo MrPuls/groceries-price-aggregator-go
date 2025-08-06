@@ -4,39 +4,42 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
-	"net/url"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/MrPuls/groceries-price-aggregator-go/internal/utils"
 )
 
 type SilpoScraper struct {
 	Client    *http.Client
 	CSVHeader []string
+	Headers   map[string]string
 }
 
-type CategoryItem struct {
+type SilpoCategoryItem struct {
 	Title string
 	Slug  string `json:"slug"`
 	Total int    `json:"total"`
 }
 
-type Categories struct {
-	Total int64          `json:"total"`
-	Items []CategoryItem `json:"items"`
+type SilpoCategories struct {
+	Total int64               `json:"total"`
+	Items []SilpoCategoryItem `json:"items"`
 }
 
-type ProductDetails struct {
-	Title        string  `json:"title"`
+type SilpoProduct struct {
+	Name         string  `json:"title"`
 	SectionSlug  string  `json:"sectionSlug"`
 	DisplayPrice float64 `json:"displayPrice"`
 	DisplayRatio string  `json:"displayRatio"`
 }
 
-type Product struct {
-	Total int              `json:"total"`
-	Items []ProductDetails `json:"items"`
+type SilpoProducts struct {
+	Total int            `json:"total"`
+	Items []SilpoProduct `json:"items"`
 }
 
 func NewSilpoClient() *SilpoScraper {
@@ -53,64 +56,46 @@ func NewSilpoClient() *SilpoScraper {
 			},
 		},
 		CSVHeader: CSVHeader,
+		Headers: map[string]string{
+			"Accept":          "application/json",
+			"Accept-Encoding": "utf-8",
+			"Host":            "sf-ecom-api.silpo.ua",
+			"Origin":          "https://silpo.ua",
+			"Referer":         "https://silpo.ua/",
+			"User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
+			"Sec-Fetch-Mode":  "cors",
+			"Sec-Fetch-Site":  "same-site",
+			"Sec-Fetch-Dest":  "empty",
+			"Sec-GPC":         "1",
+			"TE":              "trailers",
+			"Accept-Language": "en-GB,en;q=0.5",
+		},
 	}
 }
 
-func (s *SilpoScraper) makeRequest(reqUrl string, params map[string]string) (resp *http.Response, err error) {
-	if params != nil {
-		p := url.Values{}
-		for k, v := range params {
-			p.Add(k, v)
-		}
-		queryString := p.Encode()
-
-		reqUrl = fmt.Sprintf("%s?%s", reqUrl, queryString)
-	}
-
-	req, err := http.NewRequest("GET", reqUrl, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	req.Header.Add("Accept", "application/json")
-	req.Header.Add("Accept-Encoding", "utf-8")
-	req.Host = "sf-ecom-api.scrappers.ua"
-	req.Header.Add("Origin", "https://silpo.ua")
-	req.Header.Add("Referer", "https://silpo.ua/")
-	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0")
-	req.Header.Add("Sec-Fetch-Mode", "cors")
-	req.Header.Add("Sec-Fetch-Site", "same-site")
-	req.Header.Add("Sec-Fetch-Dest", "empty")
-	req.Header.Add("Sec-GPC", "1")
-	req.Header.Add("TE", "trailers")
-	req.Header.Add("Accept-Language", "en-GB,en;q=0.5")
-	fmt.Printf("Requesting: %s\n", reqUrl)
-	resp, respErr := s.Client.Do(req)
-	if respErr != nil {
-		return nil, respErr
-	}
-
-	return resp, nil
-}
-
-func (s *SilpoScraper) GetCategories() (*Categories, error) {
+func (s *SilpoScraper) GetCategories() (*SilpoCategories, error) {
 	params := map[string]string{
 		"deliveryType": "DeliveryHome",
 		"depth":        "1",
 	}
-	resp, respErr := s.makeRequest(SilpoCategoriesURL, params)
+	reqParams := utils.PrepareURLParams(params)
+	req, reqErr := utils.MakeGetRequest(SilpoCategoriesURL, s.Headers, reqParams)
+	if reqErr != nil {
+		return nil, reqErr
+	}
+	resp, respErr := s.Client.Do(req)
 	if respErr != nil {
-		panic(respErr)
+		return nil, respErr
 	}
 	bb, _ := io.ReadAll(resp.Body)
 	err := resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
-	var c *Categories
+	var c *SilpoCategories
 	rb := json.Unmarshal(bb, &c)
 	if rb != nil {
-		panic(rb)
+		return nil, rb
 	}
 	var total int
 	for _, v := range c.Items {
@@ -120,10 +105,14 @@ func (s *SilpoScraper) GetCategories() (*Categories, error) {
 	return c, nil
 }
 
-func (s *SilpoScraper) GetCategoriesTitles(cts *Categories) {
+func (s *SilpoScraper) GetCategoriesTitles(cts *SilpoCategories) {
 	for k, v := range cts.Items {
-		ctUrl := fmt.Sprintf("%s%s", SilpoCategoryDetailsURL, v.Slug)
-		resp, err := s.makeRequest(ctUrl, nil)
+		ctUrl := fmt.Sprintf("%s/%s", SilpoCategoryDetailsURL, v.Slug)
+		req, reqErr := utils.MakeGetRequest(ctUrl, s.Headers, nil)
+		if reqErr != nil {
+			log.Fatal(reqErr)
+		}
+		resp, err := s.Client.Do(req)
 		if err != nil {
 			panic(err)
 		}
@@ -132,7 +121,7 @@ func (s *SilpoScraper) GetCategoriesTitles(cts *Categories) {
 		if bcErr != nil {
 			return
 		}
-		var ci CategoryItem
+		var ci SilpoCategoryItem
 		rb := json.Unmarshal(bb, &ci)
 		if rb != nil {
 			panic(rb)
@@ -140,17 +129,17 @@ func (s *SilpoScraper) GetCategoriesTitles(cts *Categories) {
 		cts.Items[k].Title = ci.Title
 	}
 }
-func (s *SilpoScraper) GetProducts(cti []CategoryItem) ([][]string, error) {
+func (s *SilpoScraper) GetProducts(cti []SilpoCategoryItem) ([][]string, error) {
 	querySize := 100
-	mu := sync.Mutex{}
+	mu := &sync.Mutex{}
 	var result [][]string
 	var wg sync.WaitGroup
-	var httpSemaphore = make(chan struct{}, 35)
+	var httpSemaphore = make(chan struct{}, 25)
 	resultsChan := make(chan []string)
 
 	for _, ci := range cti {
 		wg.Add(1)
-		go func(ci CategoryItem) {
+		go func(ci SilpoCategoryItem) {
 			defer wg.Done()
 			params := map[string]string{
 				"deliveryType":           "DeliveryHome",
@@ -167,43 +156,42 @@ func (s *SilpoScraper) GetProducts(cti []CategoryItem) ([][]string, error) {
 			for offset := 0; offset <= ci.Total; offset += querySize {
 				offsetWg.Add(1)
 				go func(offset int) {
-					httpSemaphore <- struct{}{} // Acquire
+					httpSemaphore <- struct{}{}
 					defer func() { <-httpSemaphore }()
 					defer offsetWg.Done()
-					mu.Lock()
 					params["offset"] = strconv.Itoa(offset)
-					p := url.Values{}
-					for k, v := range params {
-						p.Add(k, v)
-					}
-					queryString := p.Encode()
+					mu.Lock()
+					p := utils.PrepareURLParams(params)
 					mu.Unlock()
-
-					reqUrl := fmt.Sprintf("%s?%s", SilpoProductsURL, queryString)
-					resp, respErr := s.makeRequest(reqUrl, nil)
+					req, reqErr := utils.MakeGetRequest(SilpoProductsURL, s.Headers, p)
+					if reqErr != nil {
+						log.Fatal(reqErr)
+					}
+					fmt.Printf("Request URL: %s\n", req.URL)
+					resp, respErr := s.Client.Do(req)
 					if respErr != nil {
-						panic(respErr)
+						log.Fatal(respErr)
 					}
 					respBody, respBodyErr := io.ReadAll(resp.Body)
 					if respBodyErr != nil {
-						panic(respBodyErr)
+						log.Fatal(respBodyErr)
 					}
 					err := resp.Body.Close()
 					if err != nil {
-						return
+						log.Fatal(err)
 					}
-					var prd Product
+					var prd SilpoProducts
 					rbJson := json.Unmarshal(respBody, &prd)
 					if rbJson != nil {
-						panic(rbJson)
+						log.Fatal(rbJson)
 					}
 					for _, v := range prd.Items {
 						resultsChan <- []string{
-							v.Title,
+							v.Name,
 							fmt.Sprintf("https://silpo.ua/product/%s", v.SectionSlug),
 							fmt.Sprintf("%.2f грн/%s", v.DisplayPrice, v.DisplayRatio),
 							ci.Title,
-							"scrappers",
+							"silpo",
 						}
 					}
 				}(offset)

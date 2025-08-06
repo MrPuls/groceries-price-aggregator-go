@@ -31,6 +31,6 @@ func WriteToCsv(filename string, header []string, records [][]string) error {
 	if fcErr != nil {
 		return fcErr
 	}
-	log.Println("Data successfully written to output.csv")
+	log.Printf("Data successfully written to %s", filename)
 	return nil
 }

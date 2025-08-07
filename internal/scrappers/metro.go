@@ -111,7 +111,7 @@ func (m *MetroScraper) GetProducts(cts []MetroCategoryItem) ([][]string, error) 
 	pageSize := 30
 	var wg sync.WaitGroup
 	mu := &sync.Mutex{}
-	var httpSemaphore = make(chan struct{}, 25)
+	var httpSemaphore = make(chan struct{}, 20)
 	resultsChan := make(chan []string)
 
 	for _, ct := range cts {

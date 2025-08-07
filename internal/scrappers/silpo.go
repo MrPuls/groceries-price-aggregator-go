@@ -134,7 +134,7 @@ func (s *SilpoScraper) GetProducts(cti []SilpoCategoryItem) ([][]string, error) 
 	mu := &sync.Mutex{}
 	var result [][]string
 	var wg sync.WaitGroup
-	var httpSemaphore = make(chan struct{}, 25)
+	var httpSemaphore = make(chan struct{}, 30)
 	resultsChan := make(chan []string)
 
 	for _, ci := range cti {

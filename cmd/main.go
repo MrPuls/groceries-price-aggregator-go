@@ -1,10 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/MrPuls/groceries-price-aggregator-go/internal/scrappers"
-	"github.com/MrPuls/groceries-price-aggregator-go/internal/utils"
 )
 
 func main() {
@@ -22,23 +22,31 @@ func main() {
 	//}
 	//wErr := utils.WriteToCsv("silpo", slp.CSVHeader, products)
 	//if wErr != nil {
-	//	return
+	//	log.Fatal(wErr)
 	//}
 
-	log.Println("Starting main program")
-	mt := scrappers.NewMetroClient()
-	cts, ctsErr := mt.GetCategories()
-	if ctsErr != nil {
-		log.Fatal(ctsErr)
+	//log.Println("Starting main program")
+	//mt := scrappers.NewMetroClient()
+	//cts, ctsErr := mt.GetCategories()
+	//if ctsErr != nil {
+	//	log.Fatal(ctsErr)
+	//}
+	//
+	//products, prErr := mt.GetProducts(cts)
+	//if prErr != nil {
+	//	log.Fatal(prErr)
+	//}
+	//wErr := utils.WriteToCsv("metro", mt.CSVHeader, products)
+	//if wErr != nil {
+	//	log.Fatal(wErr)
+	//}
+
+	vs := scrappers.NewVarusClient()
+	cts, err := vs.GetCategories()
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	products, prErr := mt.GetProducts(cts)
-	if prErr != nil {
-		log.Fatal(prErr)
-	}
-	wErr := utils.WriteToCsv("metro", mt.CSVHeader, products)
-	if wErr != nil {
-		return
-	}
+	fmt.Println(cts)
 
 }

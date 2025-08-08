@@ -131,26 +131,20 @@ func (s *SilpoScraper) GetCategoriesTitles(cts *SilpoCategories) {
 }
 func (s *SilpoScraper) GetProducts(cti []SilpoCategoryItem) ([][]string, error) {
 	querySize := 100
-	mu := &sync.Mutex{}
 	var result [][]string
 	var wg sync.WaitGroup
 	var httpSemaphore = make(chan struct{}, 30)
 	resultsChan := make(chan []string)
+	go func() {
+		for product := range resultsChan {
+			result = append(result, product)
+		}
+	}()
 
 	for _, ci := range cti {
 		wg.Add(1)
 		go func(ci SilpoCategoryItem) {
 			defer wg.Done()
-			params := map[string]string{
-				"deliveryType":           "DeliveryHome",
-				"category":               ci.Slug,
-				"includeChildCategories": "true",
-				"sortBy":                 "popularity",
-				"sortDirection":          "desc",
-				"inStock":                "false",
-				"limit":                  strconv.Itoa(querySize),
-				"offset":                 strconv.Itoa(0),
-			}
 			fmt.Println("Fetching products for", ci.Slug)
 			var offsetWg sync.WaitGroup
 			for offset := 0; offset <= ci.Total; offset += querySize {
@@ -159,10 +153,16 @@ func (s *SilpoScraper) GetProducts(cti []SilpoCategoryItem) ([][]string, error) 
 					httpSemaphore <- struct{}{}
 					defer func() { <-httpSemaphore }()
 					defer offsetWg.Done()
-					params["offset"] = strconv.Itoa(offset)
-					mu.Lock()
-					p := utils.PrepareURLParams(params)
-					mu.Unlock()
+					p := utils.PrepareURLParams(map[string]string{
+						"deliveryType":           "DeliveryHome",
+						"category":               ci.Slug,
+						"includeChildCategories": "true",
+						"sortBy":                 "popularity",
+						"sortDirection":          "desc",
+						"inStock":                "false",
+						"limit":                  strconv.Itoa(querySize),
+						"offset":                 strconv.Itoa(offset),
+					})
 					req, reqErr := utils.MakeGetRequest(SilpoProductsURL, s.Headers, p)
 					if reqErr != nil {
 						log.Fatal(reqErr)
@@ -176,9 +176,9 @@ func (s *SilpoScraper) GetProducts(cti []SilpoCategoryItem) ([][]string, error) 
 					if respBodyErr != nil {
 						log.Fatal(respBodyErr)
 					}
-					err := resp.Body.Close()
-					if err != nil {
-						log.Fatal(err)
+					bcErr := resp.Body.Close()
+					if bcErr != nil {
+						log.Fatal(bcErr)
 					}
 					var prd SilpoProducts
 					rbJson := json.Unmarshal(respBody, &prd)
@@ -205,10 +205,6 @@ func (s *SilpoScraper) GetProducts(cti []SilpoCategoryItem) ([][]string, error) 
 		wg.Wait()
 		close(resultsChan)
 	}()
-
-	for product := range resultsChan {
-		result = append(result, product)
-	}
 
 	return result, nil
 }

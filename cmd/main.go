@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/MrPuls/groceries-price-aggregator-go/internal/scrappers"
+	"github.com/MrPuls/groceries-price-aggregator-go/internal/utils"
 )
 
 func main() {
@@ -45,6 +46,14 @@ func main() {
 	cts, err := vs.GetCategories()
 	if err != nil {
 		log.Fatal(err)
+	}
+	products, prErr := vs.GetProducts(*cts)
+	if prErr != nil {
+		log.Fatal(prErr)
+	}
+	wErr := utils.WriteToCsv("varus", vs.CSVHeader, products)
+	if wErr != nil {
+		log.Fatal(wErr)
 	}
 
 	fmt.Println(cts)

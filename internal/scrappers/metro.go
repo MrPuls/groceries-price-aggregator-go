@@ -106,32 +106,35 @@ func (m *MetroScraper) GetCategories() ([]MetroCategoryItem, error) {
 	return c, nil
 }
 
+// GetProducts TODO logging instead of fatal. And refactor according to https://gemini.google.com/app/d9366ea6ab5d45b3
 func (m *MetroScraper) GetProducts(cts []MetroCategoryItem) ([][]string, error) {
 	var result [][]string
 	pageSize := 30
 	var wg sync.WaitGroup
-	mu := &sync.Mutex{}
-	var httpSemaphore = make(chan struct{}, 20)
+	var httpSemaphore = make(chan struct{}, 30)
 	resultsChan := make(chan []string)
 
-	for _, ct := range cts {
+	go func() {
+		for product := range resultsChan {
+			result = append(result, product)
+		}
+	}()
+
+	for _, ci := range cts {
 		wg.Add(1)
-		go func(ct MetroCategoryItem) {
+		go func(ci MetroCategoryItem) {
 			defer wg.Done()
 			var pageWg sync.WaitGroup
-			for page := 1; page <= (ct.Total/pageSize)+1; page++ {
+			for page := 1; page <= (ci.Total/pageSize)+1; page++ {
 				pageWg.Add(1)
 				go func(page int) {
 					httpSemaphore <- struct{}{}
 					defer func() { <-httpSemaphore }()
 					defer pageWg.Done()
-					params := map[string]string{
+					p := utils.PrepareURLParams(map[string]string{
 						"page": strconv.Itoa(page),
-					}
-					mu.Lock()
-					p := utils.PrepareURLParams(params)
-					mu.Unlock()
-					reqUrl := fmt.Sprintf("%s/%s/products", MetroProductsURL, ct.Slug)
+					})
+					reqUrl := fmt.Sprintf("%s/%s/products", MetroProductsURL, ci.Slug)
 					req, reqErr := utils.MakeGetRequest(reqUrl, m.Headers, p)
 					if reqErr != nil {
 						log.Fatal(reqErr)
@@ -162,7 +165,7 @@ func (m *MetroScraper) GetProducts(cts []MetroCategoryItem) ([][]string, error) 
 							v.Name,
 							v.Ref,
 							fmt.Sprintf("%.2f грн", v.Price/100),
-							ct.Title,
+							ci.Title,
 							"metro",
 						}
 					}
@@ -170,16 +173,12 @@ func (m *MetroScraper) GetProducts(cts []MetroCategoryItem) ([][]string, error) 
 				}(page)
 			}
 			pageWg.Wait()
-		}(ct)
+		}(ci)
 	}
 	go func() {
 		wg.Wait()
 		close(resultsChan)
 	}()
-
-	for product := range resultsChan {
-		result = append(result, product)
-	}
 
 	return result, nil
 }

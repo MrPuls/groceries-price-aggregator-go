@@ -135,11 +135,6 @@ func (s *SilpoScraper) GetProducts(cti []SilpoCategoryItem) ([][]string, error) 
 	var wg sync.WaitGroup
 	var httpSemaphore = make(chan struct{}, 30)
 	resultsChan := make(chan []string)
-	go func() {
-		for product := range resultsChan {
-			result = append(result, product)
-		}
-	}()
 
 	for _, ci := range cti {
 		wg.Add(1)
@@ -205,6 +200,10 @@ func (s *SilpoScraper) GetProducts(cti []SilpoCategoryItem) ([][]string, error) 
 		wg.Wait()
 		close(resultsChan)
 	}()
+
+	for product := range resultsChan {
+		result = append(result, product)
+	}
 
 	return result, nil
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/MrPuls/groceries-price-aggregator-go/internal/scrappers"
@@ -42,12 +41,13 @@ func main() {
 	//	log.Fatal(wErr)
 	//}
 
+	log.Println("Starting main program")
 	vs := scrappers.NewVarusClient()
 	cts, err := vs.GetCategories()
 	if err != nil {
 		log.Fatal(err)
 	}
-	products, prErr := vs.GetProducts(*cts)
+	products, prErr := vs.GetProducts(cts)
 	if prErr != nil {
 		log.Fatal(prErr)
 	}
@@ -55,7 +55,5 @@ func main() {
 	if wErr != nil {
 		log.Fatal(wErr)
 	}
-
-	fmt.Println(cts)
 
 }

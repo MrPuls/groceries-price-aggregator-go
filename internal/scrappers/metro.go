@@ -114,12 +114,6 @@ func (m *MetroScraper) GetProducts(cts []MetroCategoryItem) ([][]string, error) 
 	var httpSemaphore = make(chan struct{}, 30)
 	resultsChan := make(chan []string)
 
-	go func() {
-		for product := range resultsChan {
-			result = append(result, product)
-		}
-	}()
-
 	for _, ci := range cts {
 		wg.Add(1)
 		go func(ci MetroCategoryItem) {
@@ -179,6 +173,10 @@ func (m *MetroScraper) GetProducts(cts []MetroCategoryItem) ([][]string, error) 
 		wg.Wait()
 		close(resultsChan)
 	}()
+
+	for product := range resultsChan {
+		result = append(result, product)
+	}
 
 	return result, nil
 }

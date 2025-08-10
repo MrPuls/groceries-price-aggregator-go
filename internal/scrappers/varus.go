@@ -49,7 +49,7 @@ type VarusProduct struct {
 }
 
 type VarusProducts struct {
-	Items []VarusProduct
+	Items []VarusProduct `json:"hits"`
 }
 
 func NewVarusClient() *VarusScraper {
@@ -136,19 +136,14 @@ func (v *VarusScraper) GetCategories() (*VarusCategories, error) {
 	return c, nil
 }
 
-func (v *VarusScraper) GetProducts(cts VarusCategories) ([][]string, error) {
+func (v *VarusScraper) GetProducts(cts *VarusCategories) ([][]string, error) {
 	var result [][]string
 	var wg sync.WaitGroup
-	var httpSemaphore = make(chan struct{}, 20)
+	var httpSemaphore = make(chan struct{}, 25)
 	resultsChan := make(chan []string)
 	querySize := 100
-	go func() {
-		for product := range resultsChan {
-			result = append(result, product)
-		}
-	}()
 
-	for k, ci := range cts.Items {
+	for _, ci := range cts.Items {
 		wg.Add(1)
 		// TODO: My brother in Christ, this is truly diabolical. this must be refactored for real alongside with other scrapers
 		p := utils.PrepareURLParams(map[string]string{
@@ -194,19 +189,16 @@ func (v *VarusScraper) GetProducts(cts VarusCategories) ([][]string, error) {
 		bar, _ := json.Marshal(foo)
 		enc := url.QueryEscape(string(bar))
 
-		fmt.Println(enc)
 		reqUr := fmt.Sprintf("%s?%s&request=%s", VarusProductsURL, p.Encode(), enc)
 		req, err := http.NewRequest("GET", reqUr, nil)
 		if err != nil {
 			panic(err)
 		}
-		fmt.Printf("Request URL: %s\n", req.URL)
 		resp, respErr := v.Client.Do(req)
 		if respErr != nil {
 			log.Fatal(respErr)
 		}
 		respBody, respBodyErr := io.ReadAll(resp.Body)
-		fmt.Println(string(respBody))
 		if respBodyErr != nil {
 			log.Fatal(respBodyErr)
 		}
@@ -216,7 +208,7 @@ func (v *VarusScraper) GetProducts(cts VarusCategories) ([][]string, error) {
 		}
 		var cti VarusProductsTotal
 		rbJson := json.Unmarshal(respBody, &cti)
-		cts.Items[k].Total = cti.Total.Total
+		ci.Total = cti.Total.Total
 		if rbJson != nil {
 			log.Fatal(rbJson)
 		}
@@ -246,22 +238,15 @@ func (v *VarusScraper) GetProducts(cts VarusCategories) ([][]string, error) {
 						"size":            strconv.Itoa(querySize),
 						"sort":            "",
 					})
-					gqueryString := gp.Encode()
-					greqUrl := fmt.Sprintf("%s?%s", VarusProductsURL, gqueryString)
+					gbar, _ := json.Marshal(foo)
+					genc := url.QueryEscape(string(gbar))
 
-					greq, gerr := http.NewRequest("GET", greqUrl, nil)
+					greqUr := fmt.Sprintf("%s?%s&request=%s", VarusProductsURL, gp.Encode(), genc)
+					greq, gerr := http.NewRequest("GET", greqUr, nil)
 					if gerr != nil {
 						panic(gerr)
 					}
 
-					for hk, hv := range v.Headers {
-						if hk == "Host" {
-							req.Host = hv
-						}
-						req.Header.Add(hk, hv)
-					}
-
-					fmt.Printf("Request URL: %s\n", req.URL)
 					gresp, grespErr := v.Client.Do(greq)
 					if grespErr != nil {
 						log.Fatal(grespErr)
@@ -283,7 +268,7 @@ func (v *VarusScraper) GetProducts(cts VarusCategories) ([][]string, error) {
 						resultsChan <- []string{
 							i.Name,
 							fmt.Sprintf("https://varus.ua/%s", i.Ref),
-							fmt.Sprintf("%.2f грн", i.Price),
+							fmt.Sprintf("%.2f грн", i.Price.Price),
 							ci.Slug,
 							"varus",
 						}
@@ -297,6 +282,10 @@ func (v *VarusScraper) GetProducts(cts VarusCategories) ([][]string, error) {
 		wg.Wait()
 		close(resultsChan)
 	}()
+
+	for product := range resultsChan {
+		result = append(result, product)
+	}
 
 	return result, nil
 }

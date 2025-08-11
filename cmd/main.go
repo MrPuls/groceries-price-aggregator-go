@@ -1,38 +1,43 @@
 package main
 
 import (
+	"context"
 	"log"
+	"time"
 
-	"github.com/MrPuls/groceries-price-aggregator-go/internal/scrappers"
+	"github.com/MrPuls/groceries-price-aggregator-go/internal/scrapers"
 	"github.com/MrPuls/groceries-price-aggregator-go/internal/utils"
 )
 
 func main() {
-	//log.Println("Starting main program")
-	//slp := scrappers.NewSilpoClient()
-	//cts, ctsErr := slp.GetCategories()
-	//if ctsErr != nil {
-	//	log.Fatal(ctsErr)
-	//}
-	//slp.GetCategoriesTitles(cts)
-	//
-	//products, prErr := slp.GetProducts(cts.Items)
-	//if prErr != nil {
-	//	log.Fatal(prErr)
-	//}
-	//wErr := utils.WriteToCsv("silpo", slp.CSVHeader, products)
-	//if wErr != nil {
-	//	log.Fatal(wErr)
-	//}
+	log.Println("Starting main program")
+	slp := scrapers.NewSilpoScraper()
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(1*time.Minute))
+	defer cancel()
+	cts, ctsErr := slp.GetCategories(ctx)
+	if ctsErr != nil {
+		log.Fatal(ctsErr)
+	}
+
+	products, prErr := slp.GetProducts(ctx, cts.Items)
+	if prErr != nil {
+		log.Fatal(prErr)
+	}
+	wErr := utils.WriteToCsv("silpo", slp.CSVHeader, products)
+	if wErr != nil {
+		log.Fatal(wErr)
+	}
 
 	//log.Println("Starting main program")
-	//mt := scrappers.NewMetroClient()
-	//cts, ctsErr := mt.GetCategories()
+	//mt := scrapers.NewMetroScraper()
+	//ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(30*time.Second))
+	//defer cancel()
+	//cts, ctsErr := mt.GetCategories(ctx)
 	//if ctsErr != nil {
 	//	log.Fatal(ctsErr)
 	//}
 	//
-	//products, prErr := mt.GetProducts(cts)
+	//products, prErr := mt.GetProducts(ctx, cts)
 	//if prErr != nil {
 	//	log.Fatal(prErr)
 	//}
@@ -41,19 +46,19 @@ func main() {
 	//	log.Fatal(wErr)
 	//}
 
-	log.Println("Starting main program")
-	vs := scrappers.NewVarusClient()
-	cts, err := vs.GetCategories()
-	if err != nil {
-		log.Fatal(err)
-	}
-	products, prErr := vs.GetProducts(cts)
-	if prErr != nil {
-		log.Fatal(prErr)
-	}
-	wErr := utils.WriteToCsv("varus", vs.CSVHeader, products)
-	if wErr != nil {
-		log.Fatal(wErr)
-	}
+	//log.Println("Starting main program")
+	//vs := scrapers.NewVarusClient()
+	//cts, err := vs.GetCategories()
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//products, prErr := vs.GetProducts(cts)
+	//if prErr != nil {
+	//	log.Fatal(prErr)
+	//}
+	//wErr := utils.WriteToCsv("varus", vs.CSVHeader, products)
+	//if wErr != nil {
+	//	log.Fatal(wErr)
+	//}
 
 }

@@ -1,6 +1,7 @@
-package scrappers
+package scrapers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,11 @@ import (
 	"time"
 
 	"github.com/MrPuls/groceries-price-aggregator-go/internal/utils"
+)
+
+const (
+	categoriesURL = "https://varus.ua/api/catalog/vue_storefront_catalog_2/banner/_search"
+	productsURL   = "https://varus.ua/api/catalog/vue_storefront_catalog_2/product_v2/_search"
 )
 
 type VarusScraper struct {
@@ -85,7 +91,7 @@ func NewVarusClient() *VarusScraper {
 	}
 }
 
-func (v *VarusScraper) GetCategories() (*VarusCategories, error) {
+func (v *VarusScraper) GetCategories(ctx context.Context) (*VarusCategories, error) {
 	requestData := map[string]interface{}{
 		"_availableFilters": []string{},
 		"_appliedFilters": []map[string]interface{}{
@@ -113,7 +119,7 @@ func (v *VarusScraper) GetCategories() (*VarusCategories, error) {
 	}
 
 	p := utils.PrepareURLParams(categoriesParams)
-	req, reqErr := utils.MakeGetRequest(VarusCategoriesURL, v.Headers, p)
+	req, reqErr := utils.MakeGetRequest(ctx, categoriesURL, v.Headers, p)
 	if reqErr != nil {
 		return nil, reqErr
 	}
@@ -189,7 +195,7 @@ func (v *VarusScraper) GetProducts(cts *VarusCategories) ([][]string, error) {
 		bar, _ := json.Marshal(foo)
 		enc := url.QueryEscape(string(bar))
 
-		reqUr := fmt.Sprintf("%s?%s&request=%s", VarusProductsURL, p.Encode(), enc)
+		reqUr := fmt.Sprintf("%s?%s&request=%s", productsURL, p.Encode(), enc)
 		req, err := http.NewRequest("GET", reqUr, nil)
 		if err != nil {
 			panic(err)
@@ -240,8 +246,7 @@ func (v *VarusScraper) GetProducts(cts *VarusCategories) ([][]string, error) {
 					})
 					gbar, _ := json.Marshal(foo)
 					genc := url.QueryEscape(string(gbar))
-
-					greqUr := fmt.Sprintf("%s?%s&request=%s", VarusProductsURL, gp.Encode(), genc)
+					greqUr := fmt.Sprintf("%s?%s&request=%s", productsURL, gp.Encode(), genc)
 					greq, gerr := http.NewRequest("GET", greqUr, nil)
 					if gerr != nil {
 						panic(gerr)

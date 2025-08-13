@@ -1,6 +1,7 @@
-package scrappers
+package scrapers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,10 +14,15 @@ import (
 	"github.com/MrPuls/groceries-price-aggregator-go/internal/utils"
 )
 
+const (
+	metroBaseURL         = "https://stores-api.zakaz.ua/stores/48215614/categories"
+	metroProductPageSize = 30
+	metroSemaphoreSize   = 35
+)
+
 type MetroScraper struct {
-	Client    *http.Client
-	CSVHeader []string
-	Headers   map[string]string
+	Client  *http.Client
+	Headers map[string]string
 }
 
 type MetroCategoryItem struct {
@@ -36,7 +42,7 @@ type MetroProducts struct {
 	Items []MetroProduct `json:"results"`
 }
 
-func NewMetroClient() *MetroScraper {
+func NewMetroScraper() *MetroScraper {
 	return &MetroScraper{
 		Client: &http.Client{
 			Timeout: 30 * time.Second,
@@ -49,7 +55,6 @@ func NewMetroClient() *MetroScraper {
 				DisableKeepAlives:   false,
 			},
 		},
-		CSVHeader: CSVHeader,
 		Headers: map[string]string{
 			"Host":             "stores-api.zakaz.ua",
 			"User-Agent":       "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0",
@@ -72,89 +77,72 @@ func NewMetroClient() *MetroScraper {
 	}
 }
 
-func (m *MetroScraper) GetCategories() ([]MetroCategoryItem, error) {
+func (m *MetroScraper) GetCategories(ctx context.Context) ([]MetroCategoryItem, error) {
 	params := map[string]string{
 		"only_parents": "true",
 	}
 	p := utils.PrepareURLParams(params)
-	req, reqErr := utils.MakeGetRequest(MetroCategoriesURL, m.Headers, p)
-	if reqErr != nil {
-		return nil, reqErr
+	req, err := utils.MakeGetRequest(ctx, metroBaseURL, m.Headers, p)
+	if err != nil {
+		return nil, err
 	}
 
-	resp, respErr := m.Client.Do(req)
-	if respErr != nil {
-		return nil, respErr
+	resp, err := m.Client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("[Metro] getting categories: status code %d", resp.StatusCode)
 	}
 
-	bb, _ := io.ReadAll(resp.Body)
-	err := resp.Body.Close()
+	readBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 	var c []MetroCategoryItem
-	rb := json.Unmarshal(bb, &c)
-	if rb != nil {
-		return nil, rb
+	jsonErr := json.Unmarshal(readBody, &c)
+	if jsonErr != nil {
+		return nil, jsonErr
 	}
-	total := 0
+	var total int
 	for _, v := range c {
 		total += v.Total
 	}
-	fmt.Printf("Found %v categories with total amount of items: %v\n", len(c), total)
+	fmt.Printf("[Metro] Found %v categories with total amount of items: %v\n", len(c), total)
 
 	return c, nil
 }
 
-// GetProducts TODO logging instead of fatal. And refactor according to https://gemini.google.com/app/d9366ea6ab5d45b3
-func (m *MetroScraper) GetProducts(cts []MetroCategoryItem) ([][]string, error) {
+func (m *MetroScraper) GetProducts(ctx context.Context, cts []MetroCategoryItem) ([][]string, error) {
 	var result [][]string
-	pageSize := 30
 	var wg sync.WaitGroup
-	var httpSemaphore = make(chan struct{}, 30)
+	httpSemaphore := make(chan struct{}, metroSemaphoreSize)
 	resultsChan := make(chan []string)
-
 	for _, ci := range cts {
 		wg.Add(1)
+		numPages := (ci.Total / metroProductPageSize) + 1
 		go func(ci MetroCategoryItem) {
 			defer wg.Done()
 			var pageWg sync.WaitGroup
-			for page := 1; page <= (ci.Total/pageSize)+1; page++ {
+			for page := 1; page <= numPages; page++ {
 				pageWg.Add(1)
 				go func(page int) {
 					httpSemaphore <- struct{}{}
 					defer func() { <-httpSemaphore }()
 					defer pageWg.Done()
-					p := utils.PrepareURLParams(map[string]string{
-						"page": strconv.Itoa(page),
-					})
-					reqUrl := fmt.Sprintf("%s/%s/products", MetroProductsURL, ci.Slug)
-					req, reqErr := utils.MakeGetRequest(reqUrl, m.Headers, p)
-					if reqErr != nil {
-						log.Fatal(reqErr)
+					select {
+					case <-ctx.Done():
+						return
+					default:
 					}
-					fmt.Printf("Request URL: %s\n", req.URL)
-					resp, respErr := m.Client.Do(req)
-					if respErr != nil {
-						log.Fatal(respErr)
-					}
-					respBody, respBodyErr := io.ReadAll(resp.Body)
-					if respBodyErr != nil {
-						log.Fatal(respBodyErr)
-					}
-					err := resp.Body.Close()
+					products, err := m.getProductsFromPage(ctx, page, ci.Slug)
 					if err != nil {
-						log.Fatal(err)
-					}
-					var prd MetroProducts
-					rbJson := json.Unmarshal(respBody, &prd)
-					if rbJson != nil {
-						log.Fatal(rbJson)
-					}
-					if len(prd.Items) == 0 {
+						log.Printf("[Metro] Error fetching products from page %d: %v", page, err)
 						return
 					}
-					for _, v := range prd.Items {
+					for _, v := range products.Items {
 						resultsChan <- []string{
 							v.Name,
 							v.Ref,
@@ -163,7 +151,6 @@ func (m *MetroScraper) GetProducts(cts []MetroCategoryItem) ([][]string, error) 
 							"metro",
 						}
 					}
-
 				}(page)
 			}
 			pageWg.Wait()
@@ -179,4 +166,37 @@ func (m *MetroScraper) GetProducts(cts []MetroCategoryItem) ([][]string, error) 
 	}
 
 	return result, nil
+}
+
+func (m *MetroScraper) getProductsFromPage(ctx context.Context, page int, slug string) (*MetroProducts, error) {
+	p := utils.PrepareURLParams(map[string]string{
+		"page": strconv.Itoa(page),
+	})
+	reqURL := fmt.Sprintf("%s/%s/products", metroBaseURL, slug)
+	req, err := utils.MakeGetRequest(ctx, reqURL, m.Headers, p)
+	if err != nil {
+		return nil, fmt.Errorf("[Metro] error making HTTP request: %v", err)
+	}
+	fmt.Printf("[Metro] Getting products from: %s\n", req.URL)
+	resp, err := m.Client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("[Metro] error getting request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("[Metro] bad status for %s: %s", reqURL, resp.Status)
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("[Metro] error reading response body: %v", err)
+	}
+	var prd MetroProducts
+	jsonErr := json.Unmarshal(respBody, &prd)
+	if jsonErr != nil {
+		return nil, fmt.Errorf("[Metro] error unmarshalling response body: %v", jsonErr)
+	}
+
+	return &prd, nil
 }

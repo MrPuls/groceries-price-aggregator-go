@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -14,15 +15,19 @@ func PrepareURLParams(p map[string]string) url.Values {
 	return v
 }
 
-func MakeGetRequest(reqUrl string, headers map[string]string, params url.Values) (resp *http.Request, err error) {
+func MakeGetRequest(ctx context.Context, reqUrl string, headers map[string]string, params url.Values) (resp *http.Request, err error) {
 	if params != nil {
 		queryString := params.Encode()
 		reqUrl = fmt.Sprintf("%s?%s", reqUrl, queryString)
 	}
 
-	req, err := http.NewRequest("GET", reqUrl, nil)
+	if _, urlParseErr := url.Parse(reqUrl); urlParseErr != nil {
+		return nil, fmt.Errorf("invalid URL: %v", urlParseErr)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", reqUrl, nil)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("[Util] error creating a request: %s", err)
 	}
 
 	if headers != nil {

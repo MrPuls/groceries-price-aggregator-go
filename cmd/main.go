@@ -1,59 +1,18 @@
 package main
 
 import (
+	"context"
 	"log"
+	"time"
 
-	"github.com/MrPuls/groceries-price-aggregator-go/internal/scrappers"
-	"github.com/MrPuls/groceries-price-aggregator-go/internal/utils"
+	"github.com/MrPuls/groceries-price-aggregator-go/cmd/runner"
 )
 
 func main() {
-	//log.Println("Starting main program")
-	//slp := scrappers.NewSilpoClient()
-	//cts, ctsErr := slp.GetCategories()
-	//if ctsErr != nil {
-	//	log.Fatal(ctsErr)
-	//}
-	//slp.GetCategoriesTitles(cts)
-	//
-	//products, prErr := slp.GetProducts(cts.Items)
-	//if prErr != nil {
-	//	log.Fatal(prErr)
-	//}
-	//wErr := utils.WriteToCsv("silpo", slp.CSVHeader, products)
-	//if wErr != nil {
-	//	log.Fatal(wErr)
-	//}
-
-	//log.Println("Starting main program")
-	//mt := scrappers.NewMetroClient()
-	//cts, ctsErr := mt.GetCategories()
-	//if ctsErr != nil {
-	//	log.Fatal(ctsErr)
-	//}
-	//
-	//products, prErr := mt.GetProducts(cts)
-	//if prErr != nil {
-	//	log.Fatal(prErr)
-	//}
-	//wErr := utils.WriteToCsv("metro", mt.CSVHeader, products)
-	//if wErr != nil {
-	//	log.Fatal(wErr)
-	//}
-
 	log.Println("Starting main program")
-	vs := scrappers.NewVarusClient()
-	cts, err := vs.GetCategories()
-	if err != nil {
-		log.Fatal(err)
-	}
-	products, prErr := vs.GetProducts(cts)
-	if prErr != nil {
-		log.Fatal(prErr)
-	}
-	wErr := utils.WriteToCsv("varus", vs.CSVHeader, products)
-	if wErr != nil {
-		log.Fatal(wErr)
-	}
-
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(1*time.Minute))
+	defer cancel()
+	r := runner.NewRunner(ctx)
+	r.Run()
+	log.Println("All done!")
 }

@@ -21,9 +21,8 @@ const (
 )
 
 type MetroScraper struct {
-	Client    *http.Client
-	CSVHeader []string
-	Headers   map[string]string
+	Client  *http.Client
+	Headers map[string]string
 }
 
 type MetroCategoryItem struct {
@@ -56,7 +55,6 @@ func NewMetroScraper() *MetroScraper {
 				DisableKeepAlives:   false,
 			},
 		},
-		CSVHeader: CSVHeader,
 		Headers: map[string]string{
 			"Host":             "stores-api.zakaz.ua",
 			"User-Agent":       "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0",
@@ -93,7 +91,7 @@ func (m *MetroScraper) GetCategories(ctx context.Context) ([]MetroCategoryItem, 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("[Metro] getting categories: status code %d", resp.StatusCode)
@@ -184,7 +182,7 @@ func (m *MetroScraper) getProductsFromPage(ctx context.Context, page int, slug s
 	if err != nil {
 		return nil, fmt.Errorf("[Metro] error getting request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("[Metro] bad status for %s: %s", reqURL, resp.Status)

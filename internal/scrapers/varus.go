@@ -19,7 +19,7 @@ const (
 	varusCategoriesURL = "https://varus.ua/api/catalog/vue_storefront_catalog_2/banner/_search"
 	varusProductsURL   = "https://varus.ua/api/catalog/vue_storefront_catalog_2/product_v2/_search"
 	varusQuerySize     = 100
-	varusSemaphoreSize = 25
+	varusSemaphoreSize = 35
 )
 
 var requestParams = map[string]string{
@@ -40,9 +40,8 @@ var requestParams = map[string]string{
 }
 
 type VarusScraper struct {
-	Client    *http.Client
-	CSVHeader []string
-	Headers   map[string]string
+	Client  *http.Client
+	Headers map[string]string
 }
 
 type VarusCategoryItem struct {
@@ -90,7 +89,6 @@ func NewVarusScraper() *VarusScraper {
 				DisableKeepAlives:   false,
 			},
 		},
-		CSVHeader: CSVHeader,
 		Headers: map[string]string{
 			"Host":            "varus.ua",
 			"User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0",
@@ -147,7 +145,7 @@ func (v *VarusScraper) GetCategories(ctx context.Context) (*VarusCategories, err
 	if err != nil {
 		return nil, fmt.Errorf("[Varus] error getting response from Varus: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("[Varus] getting categories: status code %d", resp.StatusCode)
 	}
@@ -201,7 +199,7 @@ func (v *VarusScraper) GetProducts(ctx context.Context, cts *VarusCategories) ([
 		go func(ci VarusCategoryItem) {
 			defer wg.Done()
 			var offsetWg sync.WaitGroup
-			fmt.Printf("Fetching {%v} products for: %s", ci.Total, ci.Slug)
+			fmt.Printf("Fetching {%v} products for: %s\n", ci.Total, ci.Slug)
 			for offset := 0; offset <= ci.Total; offset += varusQuerySize {
 				offsetWg.Add(1)
 				go func(offset int) {
@@ -221,7 +219,7 @@ func (v *VarusScraper) GetProducts(ctx context.Context, cts *VarusCategories) ([
 					if err != nil {
 						fmt.Printf("[Varus] error getting resp from Varus: %v", err)
 					}
-					defer resp.Body.Close()
+					defer func() { _ = resp.Body.Close() }()
 					if resp.StatusCode != http.StatusOK {
 						fmt.Printf("[Varus] getting categories: status code %d", resp.StatusCode)
 					}
@@ -265,7 +263,7 @@ func (v *VarusScraper) getProductsTotal(req *http.Request, category *VarusCatego
 	if err != nil {
 		return fmt.Errorf("[Varus] error getting response from Varus: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		fmt.Printf("[Varus] getting categories: status code %d", resp.StatusCode)
 	}

@@ -23,9 +23,8 @@ const (
 )
 
 type SilpoScraper struct {
-	Client    *http.Client
-	CSVHeader []string
-	Headers   map[string]string
+	Client  *http.Client
+	Headers map[string]string
 }
 
 type SilpoCategoryItem struct {
@@ -64,7 +63,6 @@ func NewSilpoScraper() *SilpoScraper {
 				DisableKeepAlives:   false,
 			},
 		},
-		CSVHeader: CSVHeader,
 		Headers: map[string]string{
 			"Accept":          "application/json",
 			"Accept-Encoding": "utf-8",
@@ -96,7 +94,7 @@ func (s *SilpoScraper) GetCategories(ctx context.Context) (*SilpoCategories, err
 	if err != nil {
 		return nil, fmt.Errorf("[Silpo] error getting response from Silpo: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("[Silpo] getting categories: status code %d", resp.StatusCode)
 	}
@@ -143,7 +141,7 @@ func (s *SilpoScraper) getCategoriesTitles(ctx context.Context, cts *SilpoCatego
 				fmt.Printf("[Silpo] error getting response from Silpo: %v", err)
 				return
 			}
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != http.StatusOK {
 				fmt.Printf("[Silpo] getting categories: status code %d", resp.StatusCode)
 				return
@@ -235,7 +233,7 @@ func (s *SilpoScraper) getProductsFromOffset(ctx context.Context, slug string, o
 	if err != nil {
 		return nil, fmt.Errorf("[Silpo] error getting response from Silpo: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("[Silpo] bad status for %s: %s", req.URL, resp.Status)
 	}

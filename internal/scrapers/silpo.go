@@ -115,7 +115,7 @@ func (s *SilpoScraper) GetCategories(ctx context.Context) (*SilpoCategories, err
 	}
 	titlesErr := s.getCategoriesTitles(ctx, c)
 	if titlesErr != nil {
-		return nil, fmt.Errorf("[Silpo] error getting categories titles: %v", err)
+		return nil, fmt.Errorf("[Silpo] error getting categories titles: %v", titlesErr)
 	}
 	fmt.Printf("[Silpo] Found %v categories with total amount of items: %v\n", c.Total, total)
 	return c, nil
@@ -127,6 +127,11 @@ func (s *SilpoScraper) getCategoriesTitles(ctx context.Context, cts *SilpoCatego
 		wg.Add(1)
 		go func(k int, v SilpoCategoryItem) {
 			defer wg.Done()
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
 			ctUrl := fmt.Sprintf("%s/%s", silpoCategoryDetailsURL, v.Slug)
 			req, err := utils.MakeGetRequest(ctx, ctUrl, s.Headers, nil)
 			if err != nil {
@@ -138,6 +143,7 @@ func (s *SilpoScraper) getCategoriesTitles(ctx context.Context, cts *SilpoCatego
 				fmt.Printf("[Silpo] error getting response from Silpo: %v", err)
 				return
 			}
+			defer resp.Body.Close()
 			if resp.StatusCode != http.StatusOK {
 				fmt.Printf("[Silpo] getting categories: status code %d", resp.StatusCode)
 				return
@@ -145,11 +151,6 @@ func (s *SilpoScraper) getCategoriesTitles(ctx context.Context, cts *SilpoCatego
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				fmt.Printf("[Silpo] error reading response from Silpo: %v", err)
-				return
-			}
-			closeErr := resp.Body.Close()
-			if closeErr != nil {
-				fmt.Printf("[Silpo] error closing response body from Silpo: %v", closeErr)
 				return
 			}
 			var ci SilpoCategoryItem

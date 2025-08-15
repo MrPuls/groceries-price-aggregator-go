@@ -24,14 +24,18 @@ func NewRunner(ctx context.Context) *Runner {
 
 func (r *Runner) Run() {
 	var wg sync.WaitGroup
+	defer wg.Wait()
+	wg.Add(1)
 	go r.startSilpoScraper(&wg)
+	wg.Add(1)
 	go r.startMetroScraper(&wg)
+	wg.Add(1)
 	go r.startVarusScraper(&wg)
-	wg.Wait()
+	wg.Add(1)
+	go r.startAtbScraper(&wg)
 }
 
 func (r *Runner) startSilpoScraper(wg *sync.WaitGroup) {
-	wg.Add(1)
 	defer wg.Done()
 	log.Println("Starting Silpo scraper")
 	slp := scrapers.NewSilpoScraper()
@@ -50,7 +54,6 @@ func (r *Runner) startSilpoScraper(wg *sync.WaitGroup) {
 }
 
 func (r *Runner) startMetroScraper(wg *sync.WaitGroup) {
-	wg.Add(1)
 	defer wg.Done()
 	log.Println("Starting Metro scraper")
 	mt := scrapers.NewMetroScraper()
@@ -70,7 +73,6 @@ func (r *Runner) startMetroScraper(wg *sync.WaitGroup) {
 }
 
 func (r *Runner) startVarusScraper(wg *sync.WaitGroup) {
-	wg.Add(1)
 	defer wg.Done()
 	log.Println("Starting Varus scraper")
 	vs := scrapers.NewVarusScraper()
@@ -89,5 +91,23 @@ func (r *Runner) startVarusScraper(wg *sync.WaitGroup) {
 	wErr := utils.WriteToCsv("varus", r.csvHeader, products)
 	if wErr != nil {
 		fmt.Printf("[Varus] error writing to csv: %v", wErr)
+	}
+}
+
+func (r *Runner) startAtbScraper(wg *sync.WaitGroup) {
+	defer wg.Done()
+	log.Println("Starting Atb scraper")
+	atb := scrapers.NewAtbScraper()
+	cts, err := atb.GetCategories(r.ctx)
+	if err != nil {
+		fmt.Printf("[Atb] error getting categories: %v", err)
+	}
+	products, err := atb.GetProducts(r.ctx, cts)
+	if err != nil {
+		fmt.Printf("[Atb] error getting products: %v", err)
+	}
+	wErr := utils.WriteToCsv("atb", r.csvHeader, products)
+	if wErr != nil {
+		fmt.Printf("[Atb] error writing to csv: %v", wErr)
 	}
 }

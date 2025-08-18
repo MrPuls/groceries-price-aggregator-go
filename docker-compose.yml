@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:15-alpine3.22
+    container_name: groceries_pg
+    environment:
+      POSTGRES_USER: gp_user
+      POSTGRES_PASSWORD: gp_pass
+      POSTGRES_DB: groceries
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gp_user -d groceries"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata: {}

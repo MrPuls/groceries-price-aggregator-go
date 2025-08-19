@@ -7,30 +7,30 @@ import (
 	"strings"
 )
 
-func WriteToCsv(filename string, header []string, records [][]string) error {
+func WriteToCsv(filename string, header []string, records [][]string) (string, error) {
 	if !strings.HasSuffix(filename, ".csv") {
 		filename = filename + ".csv"
 	}
-	file, fErr := os.Create(filename)
-	if fErr != nil {
-		return fErr
+	file, err := os.Create(filename)
+	if err != nil {
+		return "", err
 	}
 
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	if whErr := writer.Write(header); whErr != nil {
-		return whErr
+	if err := writer.Write(header); err != nil {
+		return "", err
 	}
 
-	if wrErr := writer.WriteAll(records); wrErr != nil {
-		return wrErr
+	if err := writer.WriteAll(records); err != nil {
+		return "", err
 	}
 
 	fcErr := file.Close()
 	if fcErr != nil {
-		return fcErr
+		return "", fcErr
 	}
 	log.Printf("Data successfully written to %s", filename)
-	return nil
+	return filename, nil
 }

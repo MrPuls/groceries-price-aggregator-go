@@ -10,10 +10,22 @@ import (
 
 func main() {
 	log.Println("Starting main program")
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(1*time.Minute))
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(5*time.Minute))
 	defer cancel()
 	r := runner.NewRunner(ctx)
 	r.Run()
-	log.Println("All done!")
+	log.Println("All scrapers are done!")
 
+	log.Println("Writing CSV data")
+	db, err := r.ConnectToDB(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Pool.Close()
+
+	wErr := r.WriteCSVData(ctx, db, r.Files)
+	if wErr != nil {
+		log.Fatal(err)
+	}
+	log.Println("CSV data written successfully")
 }

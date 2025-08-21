@@ -40,7 +40,7 @@ type SilpoCategories struct {
 
 type SilpoProduct struct {
 	Name         string  `json:"title"`
-	SectionSlug  string  `json:"sectionSlug"`
+	Slug         string  `json:"slug"`
 	DisplayPrice float64 `json:"displayPrice"`
 	DisplayRatio string  `json:"displayRatio"`
 }
@@ -192,7 +192,7 @@ func (s *SilpoScraper) GetProducts(ctx context.Context, cti []SilpoCategoryItem)
 					for _, v := range products.Items {
 						resultsChan <- []string{
 							v.Name,
-							fmt.Sprintf("https://silpo.ua/product/%s", v.SectionSlug),
+							fmt.Sprintf("https://silpo.ua/product/%s", v.Slug),
 							fmt.Sprintf("%.2f грн/%s", v.DisplayPrice, v.DisplayRatio),
 							ci.Title,
 							"silpo",

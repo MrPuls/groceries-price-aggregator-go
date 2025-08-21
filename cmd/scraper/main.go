@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/MrPuls/groceries-price-aggregator-go/cmd/runner"
+	"github.com/MrPuls/groceries-price-aggregator-go/cmd/scraper/runner"
 )
 
 func main() {

@@ -45,3 +45,17 @@ insert into stores(code, name) values
                                    ('metro', 'Metro'),
                                    ('silpo', 'Silpo')
 on conflict (code) do nothing;
+
+CREATE TEXT SEARCH DICTIONARY ukrainian_hunspell (
+    TEMPLATE = ispell,
+    DictFile = ukrainian,
+    AffFile = ukrainian,
+    Stopwords = ukrainian
+    );
+
+CREATE TEXT SEARCH CONFIGURATION ukrainian (COPY = english);
+
+ALTER TEXT SEARCH CONFIGURATION ukrainian
+    ALTER MAPPING FOR asciiword, asciihword, hword_asciipart,
+          word, hword, hword_part
+              WITH ukrainian_hunspell, simple;

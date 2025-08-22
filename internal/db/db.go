@@ -115,7 +115,7 @@ func (db *DB) ReadCSVData(filename string) ([]Product, error) {
 }
 
 func (db *DB) upsertProducts(ctx context.Context, tx pgx.Tx, products []Product, storeIDs map[string]int64) (map[string]int64, error) {
-	productIDs := make(map[string]int64) // "store:ref" -> id
+	productIDs := make(map[string]int64)
 
 	for _, p := range products {
 		storeID := storeIDs[p.Shop]

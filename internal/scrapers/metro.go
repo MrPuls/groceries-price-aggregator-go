@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -144,7 +145,7 @@ func (m *MetroScraper) GetProducts(ctx context.Context, cts []MetroCategoryItem)
 					}
 					for _, v := range products.Items {
 						resultsChan <- []string{
-							v.Name,
+							strings.ReplaceAll(v.Name, ",", "."),
 							v.Ref,
 							fmt.Sprintf("%.2f грн", v.Price/100),
 							ci.Title,

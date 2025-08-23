@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,9 +29,9 @@ type SilpoScraper struct {
 }
 
 type SilpoCategoryItem struct {
-	Title string
-	Slug  string `json:"slug"`
-	Total int    `json:"total"`
+	CategoryName string
+	Slug         string `json:"slug"`
+	Total        int    `json:"total"`
 }
 
 type SilpoCategories struct {
@@ -156,7 +157,7 @@ func (s *SilpoScraper) getCategoriesTitles(ctx context.Context, cts *SilpoCatego
 			if jsonErr != nil {
 				fmt.Printf("[Silpo] error unmarshalling response from Silpo: %v", jsonErr)
 			}
-			cts.Items[k].Title = ci.Title
+			cts.Items[k].CategoryName = ci.CategoryName
 		}(k, v)
 	}
 	wg.Wait()
@@ -191,10 +192,10 @@ func (s *SilpoScraper) GetProducts(ctx context.Context, cti []SilpoCategoryItem)
 					}
 					for _, v := range products.Items {
 						resultsChan <- []string{
-							v.Name,
+							fmt.Sprintf("%s, %s", strings.ReplaceAll(v.Name, ",", "."), v.DisplayRatio),
 							fmt.Sprintf("https://silpo.ua/product/%s", v.Slug),
-							fmt.Sprintf("%.2f грн/%s", v.DisplayPrice, v.DisplayRatio),
-							ci.Title,
+							fmt.Sprintf("%.2f грн", v.DisplayPrice),
+							ci.CategoryName,
 							"silpo",
 						}
 					}

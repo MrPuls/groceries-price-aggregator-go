@@ -59,3 +59,16 @@ ALTER TEXT SEARCH CONFIGURATION ukrainian
     ALTER MAPPING FOR asciiword, asciihword, hword_asciipart,
           word, hword, hword_part
               WITH ukrainian_hunspell, simple;
+
+
+-- Find similar products
+SELECT p1.name,
+       string_agg(DISTINCT s.name, ', ') as available_stores
+FROM products p1
+         CROSS JOIN products p2
+         JOIN stores s ON p1.store_id = s.id OR p2.store_id = s.id
+WHERE p1.store_id != p2.store_id
+  AND to_tsvector('ukrainian', p1.name) @@ to_tsquery('ukrainian', 'молоко&2.5%')
+  AND to_tsvector('ukrainian', p2.name) @@ to_tsquery('ukrainian', 'молоко&2.5%')
+  AND similarity(p1.name, p2.name) > 0.9
+GROUP BY p1.name, p2.name;

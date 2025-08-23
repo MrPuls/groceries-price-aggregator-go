@@ -93,7 +93,6 @@ func (db *DB) ReadCSVData(filename string) ([]Product, error) {
 		}
 
 		// Parse price (remove currency and convert)
-		priceStr := strings.TrimSpace(record[2])
 		//priceStr = strings.ReplaceAll(priceStr, " грн/шт", "")
 		//priceStr = strings.ReplaceAll(priceStr, ",", ".")
 		//price, err := strconv.ParseFloat(priceStr, 64)
@@ -104,7 +103,7 @@ func (db *DB) ReadCSVData(filename string) ([]Product, error) {
 		product := Product{
 			Name:     strings.TrimSpace(record[0]),
 			Ref:      strings.TrimSpace(record[1]),
-			Price:    priceStr,
+			Price:    strings.TrimSpace(record[2]),
 			Category: strings.TrimSpace(record[3]),
 			Shop:     strings.TrimSpace(record[4]),
 		}

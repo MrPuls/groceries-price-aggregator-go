@@ -287,7 +287,7 @@ func (a *AtbScraper) fetchProducts(ctx context.Context, urlStr string, page *int
 			ref := atbBaseUrl + href
 
 			resultChan <- []string{
-				name,
+				strings.ReplaceAll(name, ",", "."),
 				ref,
 				price,
 				categoryName,

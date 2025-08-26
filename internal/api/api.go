@@ -20,10 +20,8 @@ type Store struct {
 }
 
 type Product struct {
-	Name     string `json:"name"`
-	Price    string `json:"price"`
-	Currency string `json:"currency"`
-	Ref      string `json:"url"`
+	Name   string   `json:"name"`
+	Stores []string `json:"available_stores"`
 }
 
 type Server struct {
@@ -105,21 +103,23 @@ func (s *Server) getStores(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// TODO: Perhaps, instead of fetching all products from the database,
-//
-//	we should fetch the unique products and then list their availability and prices for each store,
-//		similar to what hotline does.
-//		It can look like a product tile with a little store icon,
-//		showing in which stores it is available and after the click on tile - show the prices in each store.
 func (s *Server) getProducts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	query := strings.ReplaceAll(r.URL.Query().Get("search"), " ", " & ")
 	rows, err := s.DB.Pool.Query(
-		context.Background(),
-		"SELECT p.name, p.url, pr.price, pr.currency FROM products p INNER JOIN prices pr on p.id = pr.product_id WHERE to_tsvector('ukrainian', name) @@ to_tsquery('ukrainian', $1)", query,
-	)
+		context.Background(), `
+		SELECT p1.name,
+			   array_agg(DISTINCT s.name) as available_stores
+		FROM products p1
+				 CROSS JOIN products p2
+				 JOIN stores s ON p1.store_id = s.id OR p2.store_id = s.id
+		WHERE p1.store_id != p2.store_id
+		  AND to_tsvector('ukrainian', p1.name) @@ to_tsquery('ukrainian', $1)
+		  AND to_tsvector('ukrainian', p2.name) @@ to_tsquery('ukrainian', $1)
+		  AND similarity(p1.name, p2.name) > 0.9
+		GROUP BY p1.name, p2.name;`, query)
 	if err != nil {
 		log.Printf("Database query failed: %v", err)
 		http.Error(w, fmt.Sprintf("Database query failed: %v", err), http.StatusInternalServerError)
@@ -129,7 +129,7 @@ func (s *Server) getProducts(w http.ResponseWriter, r *http.Request) {
 	var products []Product
 	for rows.Next() {
 		var product Product
-		err := rows.Scan(&product.Name, &product.Ref, &product.Price, &product.Currency)
+		err := rows.Scan(&product.Name, &product.Stores)
 		if err != nil {
 			log.Printf("Failed to scan row: %v", err)
 			http.Error(w, fmt.Sprintf("Failed to scan row: %v", err), http.StatusInternalServerError)

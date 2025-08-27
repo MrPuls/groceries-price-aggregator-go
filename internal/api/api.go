@@ -19,9 +19,15 @@ type Store struct {
 	Code string `json:"code"`
 }
 
+type ProductStoreMapping struct {
+	ProductID int    `json:"product_id"`
+	StoreName string `json:"store_name"`
+}
+
 type Product struct {
-	Name   string   `json:"name"`
-	Stores []string `json:"available_stores"`
+	Name         string      `json:"name"`
+	Stores       []string    `json:"available_stores"`
+	StoreMapping interface{} `json:"product_store_mapping"`
 }
 
 type Server struct {
@@ -44,6 +50,7 @@ func (s *Server) Start() {
 	s.Router.HandleFunc("GET /", s.helloWorld)
 	s.Router.HandleFunc("GET /api/v1/stores", s.getStores)
 	s.Router.HandleFunc("GET /api/v1/products", s.getProducts)
+	s.Router.HandleFunc("GET /api/v1/products/{productId}", s.getProductById)
 
 	err := http.ListenAndServe(fmt.Sprintf(":%v", s.Port), s.Router)
 	if err != nil {
@@ -111,15 +118,19 @@ func (s *Server) getProducts(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.DB.Pool.Query(
 		context.Background(), `
 		SELECT p1.name,
-			   array_agg(DISTINCT s.name) as available_stores
+	   	jsonb_object_agg(p_info.store_name, p_info.id) as product_store_mapping,
+	   	array_agg(DISTINCT p_info.store_name) as available_stores
 		FROM products p1
-				 CROSS JOIN products p2
-				 JOIN stores s ON p1.store_id = s.id OR p2.store_id = s.id
-		WHERE p1.store_id != p2.store_id
+			 CROSS JOIN (
+		SELECT p2.id, p2.name, p2.store_id, s2.name as store_name
+		FROM products p2
+				 JOIN stores s2 ON p2.store_id = s2.id
+		) p_info
+		WHERE p1.store_id != p_info.store_id
 		  AND to_tsvector('ukrainian', p1.name) @@ to_tsquery('ukrainian', $1)
-		  AND to_tsvector('ukrainian', p2.name) @@ to_tsquery('ukrainian', $1)
-		  AND similarity(p1.name, p2.name) > 0.9
-		GROUP BY p1.name, p2.name;`, query)
+		  AND to_tsvector('ukrainian', p_info.name) @@ to_tsquery('ukrainian', $1)
+		  AND similarity(p1.name, p_info.name) > 0.9
+		GROUP BY p1.name, p1.id;`, query)
 	if err != nil {
 		log.Printf("Database query failed: %v", err)
 		http.Error(w, fmt.Sprintf("Database query failed: %v", err), http.StatusInternalServerError)
@@ -129,7 +140,7 @@ func (s *Server) getProducts(w http.ResponseWriter, r *http.Request) {
 	var products []Product
 	for rows.Next() {
 		var product Product
-		err := rows.Scan(&product.Name, &product.Stores)
+		err := rows.Scan(&product.Name, &product.StoreMapping, &product.Stores)
 		if err != nil {
 			log.Printf("Failed to scan row: %v", err)
 			http.Error(w, fmt.Sprintf("Failed to scan row: %v", err), http.StatusInternalServerError)
@@ -154,4 +165,12 @@ func (s *Server) getProducts(w http.ResponseWriter, r *http.Request) {
 	if wErr != nil {
 		return
 	}
+}
+
+func (s *Server) getProductById(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	productId := r.PathValue("productId")
+	fmt.Println(productId)
 }

@@ -30,6 +30,11 @@ type Product struct {
 	StoreMapping interface{} `json:"product_store_mapping"`
 }
 
+type ProductPrice struct {
+	Price    string `json:"price"`
+	Currency string `json:"currency"`
+}
+
 type Server struct {
 	Port   int
 	DB     *db.DB
@@ -112,11 +117,11 @@ func (s *Server) getStores(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getProducts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	_, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	query := strings.ReplaceAll(r.URL.Query().Get("search"), " ", " & ")
 	rows, err := s.DB.Pool.Query(
-		context.Background(), `
+		ctx, `
 		SELECT p1.name,
 	   	jsonb_object_agg(p_info.store_name, p_info.id) as product_store_mapping,
 	   	array_agg(DISTINCT p_info.store_name) as available_stores
@@ -169,8 +174,40 @@ func (s *Server) getProducts(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getProductById(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	_, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	productId := r.PathValue("productId")
-	fmt.Println(productId)
+	rows, err := s.DB.Pool.Query(ctx, "SELECT price, currency FROM prices WHERE product_id = $1", productId)
+	if err != nil {
+		log.Printf("Database query failed: %v", err)
+		http.Error(w, fmt.Sprintf("Database query failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	var productPrice ProductPrice
+	for rows.Next() {
+		err := rows.Scan(&productPrice.Price, &productPrice.Currency)
+		if err != nil {
+			log.Printf("Failed to scan row: %v", err)
+			http.Error(w, fmt.Sprintf("Failed to scan row: %v", err), http.StatusInternalServerError)
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("Row iteration error: %v", err)
+		http.Error(w, fmt.Sprintf("Row iteration error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	jsonData, err := json.Marshal(productPrice)
+	if err != nil {
+		log.Printf("JSON marshaling failed: %v", err)
+		http.Error(w, fmt.Sprintf("JSON marshaling failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	_, wErr := w.Write(jsonData)
+	if wErr != nil {
+		return
+	}
 }

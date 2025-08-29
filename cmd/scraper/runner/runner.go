@@ -28,18 +28,13 @@ func NewRunner(ctx context.Context) *Runner {
 func (r *Runner) Run() {
 	var wg sync.WaitGroup
 	defer wg.Wait()
-	wg.Add(1)
-	go r.startSilpoScraper(&wg)
-	wg.Add(1)
-	go r.startMetroScraper(&wg)
-	wg.Add(1)
-	go r.startVarusScraper(&wg)
-	wg.Add(1)
-	go r.startAtbScraper(&wg)
+	wg.Go(r.startSilpoScraper)
+	wg.Go(r.startMetroScraper)
+	wg.Go(r.startVarusScraper)
+	wg.Go(r.startAtbScraper)
 }
 
-func (r *Runner) startSilpoScraper(wg *sync.WaitGroup) {
-	defer wg.Done()
+func (r *Runner) startSilpoScraper() {
 	log.Println("Starting Silpo scraper")
 	slp := scrapers.NewSilpoScraper()
 	cts, err := slp.GetCategories(r.ctx)
@@ -57,8 +52,7 @@ func (r *Runner) startSilpoScraper(wg *sync.WaitGroup) {
 	r.Files = append(r.Files, filename)
 }
 
-func (r *Runner) startMetroScraper(wg *sync.WaitGroup) {
-	defer wg.Done()
+func (r *Runner) startMetroScraper() {
 	log.Println("Starting Metro scraper")
 	mt := scrapers.NewMetroScraper()
 	cts, err := mt.GetCategories(r.ctx)
@@ -77,8 +71,7 @@ func (r *Runner) startMetroScraper(wg *sync.WaitGroup) {
 	r.Files = append(r.Files, filename)
 }
 
-func (r *Runner) startVarusScraper(wg *sync.WaitGroup) {
-	defer wg.Done()
+func (r *Runner) startVarusScraper() {
 	log.Println("Starting Varus scraper")
 	vs := scrapers.NewVarusScraper()
 	cts, err := vs.GetCategories(r.ctx)
@@ -100,8 +93,7 @@ func (r *Runner) startVarusScraper(wg *sync.WaitGroup) {
 	r.Files = append(r.Files, filename)
 }
 
-func (r *Runner) startAtbScraper(wg *sync.WaitGroup) {
-	defer wg.Done()
+func (r *Runner) startAtbScraper() {
 	log.Println("Starting Atb scraper")
 	atb := scrapers.NewAtbScraper()
 	cts, err := atb.GetCategories(r.ctx)

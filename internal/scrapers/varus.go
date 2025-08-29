@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -234,7 +235,7 @@ func (v *VarusScraper) GetProducts(ctx context.Context, cts *VarusCategories) ([
 					}
 					for _, i := range prd.Items {
 						resultsChan <- []string{
-							i.Name,
+							strings.ReplaceAll(i.Name, ",", "."),
 							fmt.Sprintf("https://varus.ua/%s", i.Ref),
 							fmt.Sprintf("%.2f грн", i.Price.Price),
 							ci.Slug,

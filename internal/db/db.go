@@ -99,9 +99,14 @@ func (db *DB) ReadCSVData(filename string) ([]Product, error) {
 		//if err != nil {
 		//	return nil, fmt.Errorf("failed to parse price '%s': %w", record[2], err)
 		//}
+		name := strings.TrimSpace(record[0])
+		name = strings.ReplaceAll(name, "\"", "")
+		name = strings.ReplaceAll(name, "«", "")
+		name = strings.ReplaceAll(name, "»", "")
+		name = strings.ReplaceAll(name, ", ", "")
 
 		product := Product{
-			Name:     strings.TrimSpace(record[0]),
+			Name:     name,
 			Ref:      strings.TrimSpace(record[1]),
 			Price:    strings.TrimSpace(record[2]),
 			Category: strings.TrimSpace(record[3]),

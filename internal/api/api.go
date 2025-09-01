@@ -53,9 +53,12 @@ func (s *Server) Start() {
 	log.Printf("Starting server on port %d", s.Port)
 
 	s.Router.HandleFunc("GET /", s.helloWorld)
-	s.Router.HandleFunc("GET /api/v1/stores", s.getStores)
-	s.Router.HandleFunc("GET /api/v1/products", s.getProducts)
-	s.Router.HandleFunc("GET /api/v1/products/{productId}", s.getProductById)
+	s.Router.HandleFunc("GET /api/v1/stores", s.corsMiddleware(s.getStores))
+	s.Router.HandleFunc("OPTIONS /api/v1/stores", s.corsMiddleware(func(w http.ResponseWriter, r *http.Request) {}))
+	s.Router.HandleFunc("GET /api/v1/products", s.corsMiddleware(s.getProducts))
+	s.Router.HandleFunc("OPTIONS /api/v1/products", s.corsMiddleware(func(w http.ResponseWriter, r *http.Request) {}))
+	s.Router.HandleFunc("GET /api/v1/products/{productId}", s.corsMiddleware(s.getProductById))
+	s.Router.HandleFunc("OPTIONS /api/v1/products/{productId}", s.corsMiddleware(func(w http.ResponseWriter, r *http.Request) {}))
 
 	err := http.ListenAndServe(fmt.Sprintf(":%v", s.Port), s.Router)
 	if err != nil {
@@ -67,6 +70,25 @@ func (s *Server) helloWorld(w http.ResponseWriter, r *http.Request) {
 	_, err := io.WriteString(w, "Hello World!")
 	if err != nil {
 		return
+	}
+}
+
+func (s *Server) setCORSHeaders(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+}
+
+func (s *Server) corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.setCORSHeaders(w)
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next(w, r)
 	}
 }
 
@@ -119,7 +141,7 @@ func (s *Server) getProducts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	query := strings.ReplaceAll(r.URL.Query().Get("search"), " ", " & ")
+	query := strings.ReplaceAll(r.URL.Query().Get("q"), " ", " & ")
 	rows, err := s.DB.Pool.Query(
 		ctx, `
 		SELECT p1.name,
